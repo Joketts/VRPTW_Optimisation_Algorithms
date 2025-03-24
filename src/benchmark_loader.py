@@ -1,4 +1,7 @@
 # Adjusting file path handling for Solomon dataset
+import os
+import pandas as pd
+
 
 class VRPBenchmarkLoader:
     def __init__(self, dataset_type, dataset_name):
@@ -9,17 +12,23 @@ class VRPBenchmarkLoader:
         :param dataset_name: specific dataset file (e.g., 'C101', 'R1_8_1')
         """
         self.dataset_type = dataset_type.lower()
-        self.dataset_name = dataset_name
+        self.dataset_name = dataset_name.lower()
         self.file_path = self._get_file_path()
 
     def _get_file_path(self):
         """Determines the correct file path based on dataset type and name."""
         if self.dataset_type == "solomon":
-            base_path = os.path.join(solomon_extract_dir, "In")  # Adjusted path
+            base_path = "./datasets/solomon_100"  # Normal path as a string
         else:
-            base_path = homberger_extract_dir
+            base_path = "./datasets/homberger_800_customer"
 
-        return os.path.join(base_path, self.dataset_name + ".TXT")
+        available_files = {f.lower(): f for f in os.listdir(base_path)}
+
+        file_key = self.dataset_name + ".txt"
+        if self.dataset_name + ".txt" in available_files:
+            return f"{base_path}/{available_files[self.dataset_name + '.txt']}"  # Use normal path
+        else:
+            raise FileNotFoundError(f"Dataset file '{self.dataset_name}.txt' not found in {base_path}")
 
     def load_data(self):
         """
@@ -83,14 +92,12 @@ class VRPBenchmarkLoader:
 
 
 # Retry loading the datasets
-solomon_loader = VRPBenchmarkLoader(dataset_type="solomon", dataset_name="C101")
-solomon_data = solomon_loader.load_data()
+# solomon_loader = VRPBenchmarkLoader(dataset_type="solomon", dataset_name="c101")
+# solomon_data = solomon_loader.load_data()
 
-homberger_loader = VRPBenchmarkLoader(dataset_type="homberger", dataset_name="RC2_8_10")
-homberger_data = homberger_loader.load_data()
+# homberger_loader = VRPBenchmarkLoader(dataset_type="homberger", dataset_name="RC2_8_10")
+# homberger_data = homberger_loader.load_data()
 
 # Display results
-import ace_tools as tools
-
-tools.display_dataframe_to_user(name="Solomon C101 Benchmark Data", dataframe=solomon_data["customers"])
-tools.display_dataframe_to_user(name="Homberger RC2_8_10 Benchmark Data", dataframe=homberger_data["customers"])
+# print("Vehicle Info:", solomon_data["vehicle_info"])
+# print("First 5 Customers:\n", solomon_data["customers"].head())
