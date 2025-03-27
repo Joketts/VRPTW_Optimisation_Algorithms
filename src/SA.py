@@ -223,8 +223,8 @@ class VRPSimulatedAnnealing:
             T *= self.alpha
             iteration += 1
 
-        print("\nFinal Best Cost:", best_cost)
-        print("Final Best Solution (routes):")
+        #print("\nFinal Best Cost:", best_cost)
+        #print("Final Best Solution (routes):")
         for r in best_solution:
             print(r)
         self.check_solution_violations(best_solution)
@@ -250,12 +250,12 @@ class VRPSimulatedAnnealing:
                 if current_time > due:
                     violations.append((customer, current_time, due, current_time - due))
                 current_time += service
-            if violations:
-                print("Route", route, "has violations:")
-                for v in sorted(violations, key=lambda x: x[3], reverse=True)[:5]:
-                    print(f" Customer {v[0]}: Arrived {v[1]}, due {v[2]}, late by {v[3]}")
-            else:
-                print("Route", route, "satisfies all time window constraints.")
+            # if violations:
+            #     print("Route", route, "has violations:")
+            #     for v in sorted(violations, key=lambda x: x[3], reverse=True)[:5]:
+            #         print(f" Customer {v[0]}: Arrived {v[1]}, due {v[2]}, late by {v[3]}")
+            # else:
+            #     print("Route", route, "satisfies all time window constraints.")
 
 
 # Run the multi-vehicle SA algorithm
@@ -271,4 +271,4 @@ vrp_sa_multi = VRPSimulatedAnnealing(
 best_solution_sa = vrp_sa_multi.run_simulated_annealing()
 
 print("\nBest Route Found by SA:", best_solution_sa)
-plot_algo_route(solomon_data["customers"], best_solution_sa)
+#plot_algo_route(solomon_data["customers"], best_solution_sa)
