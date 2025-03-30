@@ -1,74 +1,126 @@
 import os
-import matplotlib.pyplot as plt
+import time
+import pandas as pd
 from benchmark_loader import VRPBenchmarkLoader
-from plot_route import plot_algo_route
 
-def run_benchmarks(dataset_type="solomon", algorithm="sa", generations=500):
-    # Define the base path for the given dataset type.
+def evaluate_time_windows(solution, customers):
+    """
+    Evaluates a solution by computing the total number of time window violations
+    and the cumulative lateness. This is done by simulating the route traversal.
+    """
+    violation_count = 0
+    total_lateness = 0.0
+    for route in solution:
+        current_time = 0
+        for customer in route[1:]:
+            if customer == 0:
+                current_time = 0
+                continue
+            row = customers[customers['id'] == customer]
+            if row.empty:
+                continue
+            row = row.iloc[0]
+            ready = row['ready_time']
+            due = row['due_time']
+            service = row['service_time']
+            if current_time < ready:
+                current_time = ready
+            if current_time > due:
+                violation_count += 1
+                total_lateness += (current_time - due)
+            current_time += service
+    return violation_count, total_lateness
+
+def run_benchmark_for_dataset(dataset_type, dataset_name, algorithm, generations):
+    """
+    Loads the dataset and runs the specified algorithm.
+    Returns total_distance, total_cost, the best solution, and the customers DataFrame.
+    """
+    loader = VRPBenchmarkLoader(dataset_type=dataset_type, dataset_name=dataset_name)
+    data = loader.load_data()
+    customers = data["customers"]
+    best_solution = None
+    total_distance = None
+    total_cost = None
+
+    if algorithm.lower() == "sa":
+        from SA import VRPSimulatedAnnealing
+        algo = VRPSimulatedAnnealing(
+            customers=customers,
+            vehicle_info=data["vehicle_info"],
+            initial_temp=500,
+            final_temp=1,
+            alpha=0.998,
+            iterations_per_temp=50
+        )
+        best_solution = algo.run_simulated_annealing()
+        # For SA, total_distance is the sum of route distances.
+        total_distance = sum(algo.calculate_route_distance(route) for route in best_solution)
+        # Compute cost using SA's cost_function.
+        total_cost = algo.cost_function(best_solution)
+    elif algorithm.lower() == "edf":
+        from EDF import edf_insertion_scheduler_vrp_hybrid, compute_route_cost
+        vehicle_info = data["vehicle_info"]
+        num_vehicles = vehicle_info.get("num_vehicles", 1)
+        best_solution = edf_insertion_scheduler_vrp_hybrid(customers, num_vehicles, candidate_list_size=7, lateness_weight=1500, parallel=True)
+        total_distance = 0.0
+        total_cost = 0.0
+        # For each route, use EDF's compute_route_cost (which returns distance, lateness, cost)
+        for route in best_solution:
+            d, l, c = compute_route_cost(route, customers, lateness_weight=1000)
+            total_distance += d
+            total_cost += c
+    else:
+        raise ValueError("Unsupported algorithm. Choose 'sa' or 'edf'.")
+
+    return total_distance, total_cost, best_solution, customers
+
+def run_benchmarks(dataset_type="solomon", algorithms=["sa", "edf"], num_runs=10, generations=500):
+    """
+    For each dataset in the appropriate folder, run the specified algorithm(s) a given number of times.
+    Records total distance, total cost, runtime, time window violation count, and cumulative lateness,
+    then saves the results to a CSV file.
+    """
     base_path = "./datasets/solomon_100" if dataset_type.lower() == "solomon" else "./datasets/homberger_800_customer"
+    # Deduplicate and sort file names
+    files = sorted(set(f.lower() for f in os.listdir(base_path) if f.lower().endswith(".txt")))
 
-    # List all .txt files in the dataset folder.
-    files = sorted(set(f.lower() for f in os.listdir(base_path) if f.endswith(".txt")))
     print("Files found:", files)
 
-    # Dictionary to store the performance metric (e.g., total route distance) per benchmark file.
-    results = {}
+    results = []
 
     for file in files:
-        # Remove the file extension to get the dataset name.
-        dataset_name = file[:-4]
-        print(f"\nRunning benchmark for dataset {dataset_name} using {algorithm.upper()} algorithm...")
+        dataset_name = file[:-4]  # Remove the ".txt" extension.
+        for algorithm in algorithms:
+            for run in range(1, num_runs + 1):
+                print(f"Running benchmark for dataset {dataset_name} using {algorithm.upper()} algorithm, run {run}...")
+                start_time = time.time()
+                try:
+                    total_distance, total_cost, best_solution, customers = run_benchmark_for_dataset(
+                        dataset_type, dataset_name, algorithm, generations
+                    )
+                    run_time = time.time() - start_time
+                    violation_count, total_lateness = evaluate_time_windows(best_solution, customers)
 
-        # Load the dataset.
-        loader = VRPBenchmarkLoader(dataset_type=dataset_type, dataset_name=dataset_name)
-        data = loader.load_data()
+                    results.append({
+                        "dataset": dataset_name,
+                        "algorithm": algorithm.upper(),
+                        "run": run,
+                        "total_distance": total_distance,
+                        "total_cost": total_cost,
+                        "time_sec": run_time,
+                        "violation_count": violation_count,
+                        "total_lateness": total_lateness
+                    })
+                except Exception as e:
+                    print(f"Error processing {dataset_name} with {algorithm.upper()} on run {run}: {e}")
 
-        # Run the selected algorithm.
-        if algorithm.lower() == "ga":
-            from GA import VRPGeneticAlgorithm
-            algo = VRPGeneticAlgorithm(
-                customers=data["customers"],
-                vehicle_info=data["vehicle_info"],
-                generations=generations
-            )
-            best_solution = algo.run_evolution()
-            # Calculate the total route distance using the GA’s method.
-            total_distance = algo.calculate_route_distance(best_solution)
-        elif algorithm.lower() == "sa":
-            from SA import VRPSimulatedAnnealing
-            algo = VRPSimulatedAnnealing(
-                customers=data["customers"],
-                vehicle_info=data["vehicle_info"],
-                initial_temp=1000,
-                final_temp=1,
-                alpha=0.998,
-                iterations_per_temp=150
-            )
-            best_solution = algo.run_simulated_annealing()
-            # For SA, sum distances for each route.
-            total_distance = sum(algo.calculate_route_distance(route) for route in best_solution)
-        else:
-            raise ValueError("Unsupported algorithm. Choose 'ga' or 'sa'.")
+    df = pd.DataFrame(results)
+    output_file = "benchmark_results_SA_homberger.csv"
+    df.to_csv(output_file, index=False)
+    print(f"Results saved to {output_file}")
 
-        # Store the performance metric.
-        results[dataset_name] = total_distance
-
-        # Optionally, visualize the route for each dataset.
-        #plot_algo_route(data["customers"], best_solution)
-
-    # Plot aggregated benchmark results.
-    dataset_names = list(results.keys())
-    distances = list(results.values())
-
-    plt.figure(figsize=(10, 6))
-    plt.bar(dataset_names, distances)
-    plt.xlabel("Benchmark Dataset")
-    plt.ylabel("Total Route Distance")
-    plt.title(f"Benchmark Results for {dataset_type.capitalize()} using {algorithm.upper()}")
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-    plt.show()
-
-# Example usage: set algorithm="sa" to run SA for all datasets.
-run_benchmarks(dataset_type="solomon", algorithm="sa", generations=500)
-
+if __name__ == "__main__":
+    # Example: Run SA 10 times for each dataset.
+    # To run EDF instead, change the algorithms parameter.
+    run_benchmarks(dataset_type="homberger", algorithms=["sa"], num_runs=3, generations=500)

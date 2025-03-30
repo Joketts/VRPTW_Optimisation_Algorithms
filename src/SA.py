@@ -8,7 +8,7 @@ from plot_route import plot_algo_route
 
 
 # Load the Solomon dataset
-solomon_loader = VRPBenchmarkLoader(dataset_type="solomon", dataset_name="c102")
+solomon_loader = VRPBenchmarkLoader(dataset_type="homberger", dataset_name="C1_8_1")
 solomon_data = solomon_loader.load_data()
 
 class VRPSimulatedAnnealing:
@@ -262,10 +262,10 @@ class VRPSimulatedAnnealing:
 vrp_sa_multi = VRPSimulatedAnnealing(
     customers=solomon_data["customers"],
     vehicle_info=solomon_data["vehicle_info"],
-    initial_temp=1000,
+    initial_temp=500,
     final_temp=1,
     alpha=0.998,
-    iterations_per_temp=150
+    iterations_per_temp=50
 )
 
 best_solution_sa = vrp_sa_multi.run_simulated_annealing()
