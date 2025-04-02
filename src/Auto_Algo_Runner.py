@@ -116,7 +116,7 @@ def run_benchmarks(dataset_type="solomon", algorithms=["sa", "edf"], num_runs=10
                     print(f"Error processing {dataset_name} with {algorithm.upper()} on run {run}: {e}")
 
     df = pd.DataFrame(results)
-    output_file = "benchmark_results_SA_homberger.csv"
+    output_file = "benchmark_results_SA_homberger_2.csv"
     df.to_csv(output_file, index=False)
     print(f"Results saved to {output_file}")
 
