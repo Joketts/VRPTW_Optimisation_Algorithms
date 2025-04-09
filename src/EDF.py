@@ -1,14 +1,3 @@
-#!/usr/bin/env python3
-"""
-edf_insertion_scheduler_vrp_hybrid.py
-
-Hybrid EDF–Insertion Scheduler with Parallelization:
-  - Restricts unscheduled customers (by earliest due time) to a candidate list.
-  - For each candidate, evaluates every possible insertion position in every route using incremental cost calculation.
-  - Parallelizes these evaluations using ProcessPoolExecutor.
-
-The cost for a route is defined as its total Euclidean distance plus a penalty (weighted by lateness_weight) for any lateness.
-"""
 
 import math
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -17,15 +6,7 @@ from plot_route import plot_algo_route
 
 def compute_route_cost(route, customers_df, lateness_weight=1000):
     """
-    Computes the total cost of a route (distance plus lateness penalty).
-
-    Args:
-        route (list): List of customer ids (with depot at start and end).
-        customers_df (DataFrame): Contains columns 'x', 'y', 'ready_time', 'due_time', 'service_time'.
-        lateness_weight (float): Weight factor applied to total lateness.
-
-    Returns:
-        tuple: (total_distance, total_lateness, total_cost)
+        computes total cost of route
     """
     total_distance = 0.0
     for i in range(len(route) - 1):
@@ -39,7 +20,7 @@ def compute_route_cost(route, customers_df, lateness_weight=1000):
 
     total_lateness = 0.0
     current_time = 0.0
-    # Skip the first depot and the final depot
+    # skips depos
     for idx in range(1, len(route)-1):
         customer_id = route[idx]
         row = customers_df[customers_df['id'] == customer_id].iloc[0]
@@ -57,18 +38,7 @@ def compute_route_cost(route, customers_df, lateness_weight=1000):
 
 def candidate_insertion_delta(route, pos, candidate, customers_df, lateness_weight=1000):
     """
-    Computes the incremental change in cost (delta) when inserting a candidate customer
-    into the given route at the specified position.
-
-    Args:
-        route (list): Current route (list of customer ids).
-        pos (int): Insertion position (between route[pos-1] and route[pos]).
-        candidate: Candidate customer id.
-        customers_df (DataFrame): Customer data.
-        lateness_weight (float): Weight factor for lateness.
-
-    Returns:
-        tuple: (delta_cost, new_route) where delta_cost is the increase in cost.
+        gets the change in cost when inserting new customer
     """
     new_route = route[:pos] + [candidate] + route[pos:]
     old_cost = compute_route_cost(route, customers_df, lateness_weight)[2]
@@ -76,53 +46,35 @@ def candidate_insertion_delta(route, pos, candidate, customers_df, lateness_weig
     delta = new_cost - old_cost
     return delta, new_route
 
-# Define a top-level function for evaluation (instead of a lambda)
 def evaluate_insertion(route, pos, candidate, v_id, customers_df, lateness_weight):
     """
-    Evaluates inserting a candidate into a route at the given position.
-
-    Returns:
-        tuple: (v_id, pos, candidate, (delta, new_route))
+    evauluates inserting customer into route at any given position
     """
     delta, new_route = candidate_insertion_delta(route, pos, candidate, customers_df, lateness_weight)
     return v_id, pos, candidate, (delta, new_route)
 
 def edf_insertion_scheduler_vrp_hybrid(customers_df, num_vehicles, candidate_list_size=10, lateness_weight=1000, parallel=True):
-    """
-    Hybrid EDF Insertion Scheduler:
-      - Restricts unscheduled candidates to the top 'candidate_list_size' by earliest due date.
-      - Evaluates all insertion positions (using incremental cost calculation) for each candidate.
-      - Optionally parallelizes candidate evaluations.
 
-    Args:
-        customers_df (DataFrame): Contains customer info.
-        num_vehicles (int): Number of available vehicles.
-        candidate_list_size (int): Maximum number of unscheduled candidates to consider at each iteration.
-        lateness_weight (float): Weight for lateness in the cost function.
-        parallel (bool): Whether to parallelize candidate evaluations.
-
-    Returns:
-        list: A list of routes (each route is a list of customer ids with depot at start and end).
-    """
     unscheduled = set(customers_df[customers_df['id'] != 0]['id'].tolist())
-    # Initialize each vehicle's route with depot at start and end.
+
+    # Initialize each vehicle route with depo at start n end
     routes = {v: [0, 0] for v in range(1, num_vehicles+1)}
 
     while unscheduled:
-        # Restrict candidate list by EDF (earliest due date)
+        # shorten list by EDF
         candidate_list = sorted(list(unscheduled), key=lambda c: customers_df[customers_df['id'] == c].iloc[0]['due_time'])
         candidate_list = candidate_list[:candidate_list_size]
 
         best_delta = float('inf')
-        best_insertion = None  # (candidate, vehicle_id, position, new_route)
+        best_insertion = None
 
         if parallel:
             tasks = []
             with ProcessPoolExecutor() as executor:
-                # Submit tasks for each candidate and every possible insertion in every route.
+                # for each customer submit tasks for every possible insertion in all routes
                 for candidate in candidate_list:
                     for v, route in routes.items():
-                        for pos in range(1, len(route)):  # valid insertion positions between nodes
+                        for pos in range(1, len(route)):  # valid positions for insertion between nodes
                             tasks.append(executor.submit(
                                 evaluate_insertion,
                                 route, pos, candidate, v, customers_df, lateness_weight
@@ -136,7 +88,6 @@ def edf_insertion_scheduler_vrp_hybrid(customers_df, num_vehicles, candidate_lis
                     except Exception as e:
                         print(f"Error in candidate evaluation: {e}")
         else:
-            # Sequential evaluation
             for candidate in candidate_list:
                 for v, route in routes.items():
                     for pos in range(1, len(route)):
@@ -155,8 +106,7 @@ def edf_insertion_scheduler_vrp_hybrid(customers_df, num_vehicles, candidate_lis
     return list(routes.values())
 
 if __name__ == '__main__':
-    # Load the Solomon dataset (e.g., c102)
-    solomon_loader = VRPBenchmarkLoader(dataset_type="homberger", dataset_name="C1_8_1")
+    solomon_loader = VRPBenchmarkLoader(dataset_type="solomon", dataset_name="r101")
     solomon_data = solomon_loader.load_data()
     customers_df = solomon_data["customers"]
     vehicle_info = solomon_data["vehicle_info"]
@@ -173,5 +123,4 @@ if __name__ == '__main__':
 
     print(f"\nTotal Distance across all vehicles: {total_distance:.2f}")
 
-    # Visualize the routes
     plot_algo_route(customers_df, routes)

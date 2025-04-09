@@ -1,44 +1,51 @@
 import matplotlib.pyplot as plt
-import numpy as np
+
 
 def plot_algo_route(customers, all_routes):
     """
-    Plots multiple VRP routes, each with a unique colormap gradient,
-    labeling each node as (customerID, visitOrder).
-    The aspect ratio is kept equal for better visual clarity.
-
-    :param customers: A pandas DataFrame with columns ['id', 'x', 'y'] for each customer/depot.
-    :param all_routes: A list of routes, where each route is a list of customer IDs
-                       e.g. [[0, 2, 5, 0], [0, 3, 4, 1, 0], ...]
+    plots vrp routes
+    skips empty vehicles
+    adds labeles
     """
-    plt.figure(figsize=(10, 8))
-    plt.title("Multi-Vehicle Routes with Gradient")
+    # filter out used vehicles
+    used_routes = []
+    for route in all_routes:
+        num_customers = sum(cust != 0 for cust in route)
+        if num_customers > 0:
+            used_routes.append(route)
 
-    # A small set of distinct colormaps to cycle through for each vehicle route
-    colormap_list = [
-        'Blues', 'Reds', 'Greens', 'Oranges', 'Purples', 'Greys',
-        'YlOrBr', 'YlGnBu', 'RdPu', 'BuPu'
+    if not used_routes:
+        print("No non-empty routes found.")
+        return
+
+    plt.figure(figsize=(10, 8))
+    plt.title("Vehicle Routes SA - Solomon - R106")
+
+    # get x,y for aspect ratio
+    all_x_values = []
+    all_y_values = []
+
+    color_list = [
+        'tab:blue', 'tab:orange', 'tab:green', 'tab:red', 'tab:purple',
+        'tab:brown', 'tab:pink', 'tab:gray', 'tab:olive', 'tab:cyan'
     ]
 
-    # Loop over each vehicle's route
-    for i, route in enumerate(all_routes):
-        # Gather (x, y) coordinates for this route
+    # plot route in each colour
+    for i, route in enumerate(used_routes):
         route_coords = []
         for cust_id in route:
-            # Find the row matching the given cust_id
             row = customers[customers['id'] == cust_id].iloc[0]
             route_coords.append((row['x'], row['y']))
+            all_x_values.append(row['x'])
+            all_y_values.append(row['y'])
 
         xs, ys = zip(*route_coords)
+        color = color_list[i % len(color_list)]
 
-        # Create a colormap with as many distinct steps as there are points in this route
-        cmap = plt.cm.get_cmap(colormap_list[i % len(colormap_list)], len(route_coords))
-
-        # Draw each edge with a gradient color, plus a marker
+        # draws routes
         for j in range(len(route_coords) - 1):
-            color = cmap(j)  # pick the color for edge j
-            # For the very first edge, add a legend label so it appears in the legend
             if j == 0:
+                # label first section
                 plt.plot([xs[j], xs[j+1]], [ys[j], ys[j+1]],
                          color=color, marker='o',
                          label=f"Vehicle {i+1}")
@@ -46,21 +53,24 @@ def plot_algo_route(customers, all_routes):
                 plt.plot([xs[j], xs[j+1]], [ys[j], ys[j+1]],
                          color=color, marker='o')
 
-            # Label each node as (customerID, visitOrder)
-            plt.text(xs[j] + 0.2, ys[j] + 0.2,
+            # add custID , number in route
+            plt.text(xs[j] + 0.3, ys[j] + 0.3,
                      f"({route[j]}, {j})",
-                     fontsize=8, color='black')
+                     fontsize=7, color='black')
 
-        # Label the final node in this route
-        j = len(route_coords) - 1
-        plt.text(xs[j] + 0.2, ys[j] + 0.2,
-                 f"({route[j]}, {j})",
-                 fontsize=8, color='black')
+        # plot final node in route
+        if route_coords:
+            final_j = len(route_coords) - 1
+            plt.plot(xs[final_j], ys[final_j], 'o', color=color)
+            plt.text(xs[final_j] + 0.3, ys[final_j] + 0.3,
+                     f"({route[final_j]}, {final_j})",
+                     fontsize=7, color='black')
 
-    # Keep the x-y aspect ratio equal so distances aren't distorted
+    # make sure distances not distorted
     plt.axis('equal')
+
     plt.xlabel("X Coordinate")
     plt.ylabel("Y Coordinate")
     plt.grid(True)
-    plt.legend()
+    plt.legend(loc='upper right', frameon=True)
     plt.show()

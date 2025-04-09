@@ -5,8 +5,7 @@ from benchmark_loader import VRPBenchmarkLoader
 
 def evaluate_time_windows(solution, customers):
     """
-    Evaluates a solution by computing the total number of time window violations
-    and the cumulative lateness. This is done by simulating the route traversal.
+    computes number of time window violations and adds up lateness
     """
     violation_count = 0
     total_lateness = 0.0
@@ -33,8 +32,8 @@ def evaluate_time_windows(solution, customers):
 
 def run_benchmark_for_dataset(dataset_type, dataset_name, algorithm, generations):
     """
-    Loads the dataset and runs the specified algorithm.
-    Returns total_distance, total_cost, the best solution, and the customers DataFrame.
+    loads dataset and runs algorithm chosen
+    returns evaulation metrics
     """
     loader = VRPBenchmarkLoader(dataset_type=dataset_type, dataset_name=dataset_name)
     data = loader.load_data()
@@ -48,15 +47,13 @@ def run_benchmark_for_dataset(dataset_type, dataset_name, algorithm, generations
         algo = VRPSimulatedAnnealing(
             customers=customers,
             vehicle_info=data["vehicle_info"],
-            initial_temp=500,
+            initial_temp=1000,
             final_temp=1,
             alpha=0.998,
-            iterations_per_temp=50
+            iterations_per_temp=150
         )
         best_solution = algo.run_simulated_annealing()
-        # For SA, total_distance is the sum of route distances.
         total_distance = sum(algo.calculate_route_distance(route) for route in best_solution)
-        # Compute cost using SA's cost_function.
         total_cost = algo.cost_function(best_solution)
     elif algorithm.lower() == "edf":
         from EDF import edf_insertion_scheduler_vrp_hybrid, compute_route_cost
@@ -65,7 +62,6 @@ def run_benchmark_for_dataset(dataset_type, dataset_name, algorithm, generations
         best_solution = edf_insertion_scheduler_vrp_hybrid(customers, num_vehicles, candidate_list_size=7, lateness_weight=1500, parallel=True)
         total_distance = 0.0
         total_cost = 0.0
-        # For each route, use EDF's compute_route_cost (which returns distance, lateness, cost)
         for route in best_solution:
             d, l, c = compute_route_cost(route, customers, lateness_weight=1000)
             total_distance += d
@@ -77,9 +73,7 @@ def run_benchmark_for_dataset(dataset_type, dataset_name, algorithm, generations
 
 def run_benchmarks(dataset_type="solomon", algorithms=["sa", "edf"], num_runs=10, generations=500):
     """
-    For each dataset in the appropriate folder, run the specified algorithm(s) a given number of times.
-    Records total distance, total cost, runtime, time window violation count, and cumulative lateness,
-    then saves the results to a CSV file.
+    runs dataset against algorithm record metrics saves to file
     """
     base_path = "./datasets/solomon_100" if dataset_type.lower() == "solomon" else "./datasets/homberger_800_customer"
     # Deduplicate and sort file names
@@ -90,7 +84,7 @@ def run_benchmarks(dataset_type="solomon", algorithms=["sa", "edf"], num_runs=10
     results = []
 
     for file in files:
-        dataset_name = file[:-4]  # Remove the ".txt" extension.
+        dataset_name = file[:-4]
         for algorithm in algorithms:
             for run in range(1, num_runs + 1):
                 print(f"Running benchmark for dataset {dataset_name} using {algorithm.upper()} algorithm, run {run}...")
@@ -116,11 +110,9 @@ def run_benchmarks(dataset_type="solomon", algorithms=["sa", "edf"], num_runs=10
                     print(f"Error processing {dataset_name} with {algorithm.upper()} on run {run}: {e}")
 
     df = pd.DataFrame(results)
-    output_file = "benchmark_results_SA_homberger_2.csv"
+    output_file = "benchmark_results_SA_homberger_3.csv"
     df.to_csv(output_file, index=False)
     print(f"Results saved to {output_file}")
 
 if __name__ == "__main__":
-    # Example: Run SA 10 times for each dataset.
-    # To run EDF instead, change the algorithms parameter.
-    run_benchmarks(dataset_type="homberger", algorithms=["sa"], num_runs=3, generations=500)
+    run_benchmarks(dataset_type="homberger", algorithms=["sa"], num_runs=4, generations=500)
